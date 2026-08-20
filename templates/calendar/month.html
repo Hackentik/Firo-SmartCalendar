@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h2 class="text-firo mb-1"><i class="bi bi-calendar3"></i> {{ month_name }} {{ year }}</h2>
+        <span class="free-now-badge">
+            <span class="dot"></span>
+            Свободно сейчас: {{ free_rooms_now }} из {{ rooms|length }} комнат
+        </span>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+        <div class="btn-group">
+            <a class="btn btn-outline-firo"
+               href="{{ url_for('calendar_view', view='month', date=prev_month_date.strftime('%Y-%m-%d')) }}">
+                ← {{ 'Пред. месяц' }}
+            </a>
+            <a class="btn btn-outline-firo"
+               href="{{ url_for('calendar_view', view='month', date=now.strftime('%Y-%m-%d')) }}">
+                Сегодня
+            </a>
+            <a class="btn btn-outline-firo"
+               href="{{ url_for('calendar_view', view='month', date=next_month_date.strftime('%Y-%m-%d')) }}">
+                {{ 'След. месяц' }} →
+            </a>
+        </div>
+        <a class="btn btn-firo" href="{{ url_for('calendar_view', view='week', date=current_date.strftime('%Y-%m-%d')) }}">
+            Неделя
+        </a>
+    </div>
+</div>
+
+{% if rooms %}
+<div class="mb-3 d-flex flex-wrap gap-2">
+    {% for room in rooms %}
+    <span class="badge" style="background-color: {{ room.color or '#FF6B35' }};">{{ room.name }}</span>
+    {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-warning">
+    Пока не добавлено ни одной переговорной комнаты.
+    {% if current_user.is_admin %}
+        <a href="{{ url_for('new_room') }}">Добавить первую комнату →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="month-grid mb-2">
+    {% for label in ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'] %}
+        <div class="weekday-label">{{ label }}</div>
+    {% endfor %}
+</div>
+
+<div class="month-grid">
+    {% for week in month_weeks %}
+        {% for day in week %}
+            {% if day == 0 %}
+                <div class="calendar-cell empty-cell"></div>
+            {% else %}
+                {% set is_today = (day == now.day and current_date.month == now.month and current_date.year == now.year) %}
+                <div class="calendar-cell {% if is_today %}current-day{% endif %}">
+                    <div class="day-number {% if is_today %}text-firo{% endif %}">{{ day }}</div>
+                    <div class="day-events">
+                        {% set day_bookings = bookings_by_day.get(day, []) %}
+                        {% for booking in day_bookings[:3] %}
+                            <a class="day-event-pill"
+                               style="background-color: {{ booking.room.color or '#FF6B35' }};"
+                               href="{{ url_for('edit_booking', booking_id=booking.id) }}"
+                               title="{{ booking.title }} · {{ booking.room.name }} · {{ booking.start_time.strftime('%H:%M') }}–{{ booking.end_time.strftime('%H:%M') }}">
+                                {{ booking.start_time.strftime('%H:%M') }} {{ booking.title }}
+                            </a>
+                        {% endfor %}
+                        {% if day_bookings|length > 3 %}
+                            <a class="day-event-more" href="{{ url_for('bookings_list') }}">
+                                + ещё {{ day_bookings|length - 3 }}
+                            </a>
+                        {% endif %}
+                    </div>
+                    <a class="add-slot-link"
+                       href="{{ url_for('new_booking') }}?date={{ '%04d-%02d-%02d'|format(current_date.year, current_date.month, day) }}">
+                        + добавить
+                    </a>
+                </div>
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="text-firo">
+        <i class="bi bi-list-check"></i>
+        {% if current_user.is_admin %}
+            Все бронирования
+        {% else %}
+            Мои бронирования
+        {% endif %}
+    </h2>
+
+    <a href="{{ url_for('new_booking') }}" class="btn btn-firo">
+        <i class="bi bi-plus-lg"></i> Забронировать новый кабинет
+    </a>
+</div>
+
+{% if bookings %}
+    <div class="row">
+        {% for booking in bookings %}
+        <div class="col-md-6 mb-3">
+            <div class="card booking-card {% if booking.is_past() %}past{% elif booking.is_ongoing() %}ongoing{% endif %}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <h5 class="card-title text-firo">{{ booking.title }}</h5>
+                        <span class="badge {% if booking.is_past() %}bg-secondary{% elif booking.is_ongoing() %}bg-success{% else %}bg-firo{% endif %}">
+                            {% if booking.is_past() %}
+                                Завершено
+                            {% elif booking.is_ongoing() %}
+                                Идет сейчас
+                            {% else %}
+                                Предстоит
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    <p class="card-text mb-2">
+                        <strong><i class="bi bi-building"></i> Комната:</strong> {{ booking.room.name }}<br>
+                        <strong><i class="bi bi-calendar3"></i> Дата:</strong> {{ booking.start_time.strftime('%d.%m.%Y') }}<br>
+                        <strong>⏰ Время:</strong> {{ booking.start_time.strftime('%H:%M') }} - {{ booking.end_time.strftime('%H:%M') }}<br>
+                        <strong><i class="bi bi-person"></i> Организатор:</strong> {{ booking.user.username }}
+                    </p>
+
+                    {# ИСПРАВЛЕНО: раньше здесь выводились "сырые" ID участников вместо их имён #}
+                    {% set participant_users = booking.get_participants_users() %}
+                    {% if participant_users %}
+                    <p class="mb-2">
+                        <strong><i class="bi bi-people"></i> Участники:</strong>
+                        {% for participant in participant_users %}
+                            <span class="badge bg-light text-dark border">{{ participant.username }}</span>
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+
+                    {% if booking.overcapacity() %}
+                    <p class="text-danger small mb-2">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Участников больше, чем вместимость комнаты ({{ booking.room.capacity }} чел.)
+                    </p>
+                    {% endif %}
+
+                    {% if booking.description %}
+                    <p class="mb-2"><strong><i class="bi bi-file-text"></i> Описание:</strong> {{ booking.description }}</p>
+                    {% endif %}
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('export_booking_ics', booking_id=booking.id) }}"
+                           class="btn btn-sm btn-outline-secondary" title="Скачать .ics для календаря">
+                            <i class="bi bi-download"></i> .ics
+                        </a>
+                        <a href="{{ url_for('edit_booking', booking_id=booking.id) }}"
+                           class="btn btn-sm btn-outline-firo">
+                            <i class="bi bi-pencil"></i> Редактировать
+                        </a>
+
+                        {% if booking.user_id == current_user.id or current_user.is_admin %}
+                        <form method="POST" action="{{ url_for('delete_booking', booking_id=booking.id) }}"
+                              style="display: inline;"
+                              onsubmit="return confirm('Точно удалить бронирование?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i> Удалить
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    {# ИСПРАВЛЕНО: раньше здесь была картинка с внешнего сервиса via.placeholder.com,
+       которая не грузилась без интернета - заменена на иконку без внешних зависимостей #}
+    <div class="text-center py-5">
+        <div class="empty-state-icon"><i class="bi bi-calendar-x display-4 d-block mb-2"></i></div>
+        <h4 class="text-muted">{% if current_user.is_admin %}Бронирований пока нет{% else %}У вас пока нет бронирований{% endif %}</h4>
+        <p class="mb-4">Забронируйте переговорную комнату прямо сейчас!</p>
+        <a href="{{ url_for('new_booking') }}" class="btn btn-firo btn-lg">
+            <i class="bi bi-plus-lg"></i> Забронировать кабинет
+        </a>
+    </div>
+{% endif %}
+{% endblock %}

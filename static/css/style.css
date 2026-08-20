@@ -1,0 +1,337 @@
+/* style.css - фирменные стили Firo SmartCalendar */
+/* Оранжевый - акцентный цвет: используется в кнопках, ссылках, бейджах и подсветке,
+   но не заливает большие поверхности (навбар, заголовки карточек и т.д.) */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --firo-orange: #FF6B35;
+    --firo-orange-light: #FF8C5A;
+    --firo-orange-dark: #E54B1E;
+    --firo-orange-pale: #FFF3E0;
+    --firo-orange-pale-2: #FFE4D6;
+    --firo-ink: #2B2620;
+    --firo-muted: #8A8078;
+    --firo-border: #ECE3DC;
+}
+
+body {
+    background-color: #FAF8F6;
+    color: var(--firo-ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+}
+
+a {
+    color: var(--firo-orange-dark);
+}
+
+/* ==== Навигация: белая, с оранжевым как акцентом, а не заливкой ==== */
+.navbar-firo {
+    border-bottom: 1px solid var(--firo-border);
+    box-shadow: 0 1px 3px rgba(43, 38, 32, 0.04);
+}
+
+.navbar-firo .navbar-brand {
+    font-weight: 700;
+    color: var(--firo-orange-dark) !important;
+    letter-spacing: 0.2px;
+}
+
+.navbar-firo .nav-link {
+    color: var(--firo-ink);
+    font-weight: 500;
+    border-radius: 8px;
+    padding: 8px 12px !important;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.navbar-firo .nav-link:hover,
+.navbar-firo .nav-link:focus {
+    color: var(--firo-orange-dark);
+    background-color: var(--firo-orange-pale);
+}
+
+.navbar-firo .dropdown-item:active {
+    background-color: var(--firo-orange);
+}
+
+/* ИСПРАВЛЕНО: раньше .btn-outline-firo использовался в шаблонах,
+   но никогда не был определён в CSS - кнопки выглядели как стандартный Bootstrap. */
+.btn-outline-firo {
+    color: var(--firo-orange-dark);
+    border: 1px solid var(--firo-orange);
+    background-color: transparent;
+}
+
+.btn-outline-firo:hover {
+    color: #fff;
+    background-color: var(--firo-orange);
+    border-color: var(--firo-orange);
+}
+
+.btn-firo {
+    background-color: var(--firo-orange);
+    color: #fff;
+    border: none;
+}
+
+.btn-firo:hover {
+    background-color: var(--firo-orange-dark);
+    color: #fff;
+}
+
+.text-firo {
+    color: var(--firo-orange-dark) !important;
+}
+
+.badge.bg-firo {
+    background-color: var(--firo-orange) !important;
+    color: #fff;
+}
+
+.card {
+    border: 1px solid var(--firo-border);
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(43, 38, 32, 0.04);
+}
+
+/* НОВОЕ: заголовки карточек больше не заливаются оранжевым целиком -
+   акцентная нижняя полоса + светлый фон, оранжевый используется точечно */
+.card-header-accent {
+    background-color: #fff;
+    color: var(--firo-ink);
+    border-bottom: 2px solid var(--firo-orange);
+    border-radius: 12px 12px 0 0 !important;
+}
+
+.card-header-accent h3, .card-header-accent h4, .card-header-accent h5 {
+    color: var(--firo-ink);
+}
+
+.card-header-accent-alt {
+    border-bottom-color: #6C7A8C;
+}
+
+.booking-card {
+    border-left: 4px solid var(--firo-orange);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.booking-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(43, 38, 32, 0.10);
+}
+
+.booking-card.ongoing {
+    border-left-color: #2E9E5B;
+    background-color: #F3FBF6;
+}
+
+.booking-card.past {
+    opacity: 0.65;
+}
+
+/* ==== Календарь: месяц ==== */
+.month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.month-grid .weekday-label {
+    text-align: center;
+    font-weight: 600;
+    color: var(--firo-orange-dark);
+    padding: 4px 0;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+}
+
+.calendar-cell {
+    min-height: 110px;
+    border: 1px solid #EFE6E0;
+    border-radius: 10px;
+    padding: 6px;
+    background-color: #fff;
+    transition: background-color 0.15s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.calendar-cell:hover {
+    background-color: var(--firo-orange-pale);
+}
+
+.calendar-cell.empty-cell {
+    background-color: transparent;
+    border: none;
+}
+
+.calendar-cell.current-day {
+    background-color: var(--firo-orange-pale-2);
+    border: 2px solid var(--firo-orange);
+}
+
+.calendar-cell .day-number {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+
+.calendar-cell .day-events {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow: hidden;
+}
+
+.day-event-pill {
+    font-size: 0.72rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-decoration: none;
+    display: block;
+}
+
+.day-event-pill:hover {
+    filter: brightness(0.92);
+    color: #fff;
+}
+
+.day-event-more {
+    font-size: 0.72rem;
+    color: var(--firo-orange-dark);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.calendar-cell .add-slot-link {
+    margin-top: auto;
+    font-size: 0.7rem;
+    text-align: center;
+    color: #C8BDB4;
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.calendar-cell:hover .add-slot-link {
+    opacity: 1;
+    color: var(--firo-orange);
+}
+
+/* ==== Календарь: неделя ==== */
+.week-grid-wrapper {
+    overflow-x: auto;
+}
+
+.week-grid {
+    display: grid;
+    grid-template-columns: 70px repeat(7, minmax(120px, 1fr));
+    min-width: 900px;
+    border: 1px solid #EFE6E0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.week-grid .grid-header {
+    background-color: var(--firo-orange-pale);
+    padding: 8px 4px;
+    text-align: center;
+    font-weight: 600;
+    border-bottom: 1px solid #EFE6E0;
+    border-right: 1px solid #EFE6E0;
+    font-size: 0.85rem;
+}
+
+.week-grid .grid-header.is-today {
+    background-color: var(--firo-orange);
+    color: #fff;
+}
+
+.week-grid .time-label {
+    padding: 6px 4px;
+    text-align: right;
+    font-size: 0.72rem;
+    color: #9c9088;
+    border-right: 1px solid #EFE6E0;
+    border-bottom: 1px solid #F5EFEB;
+}
+
+.week-grid .slot-cell {
+    border-right: 1px solid #F5EFEB;
+    border-bottom: 1px solid #F5EFEB;
+    min-height: 34px;
+    position: relative;
+    background-color: #fff;
+}
+
+.week-grid .slot-cell:hover {
+    background-color: var(--firo-orange-pale);
+}
+
+.week-grid .slot-cell.is-today-col {
+    background-color: #FFFBF8;
+}
+
+.week-event-block {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.68rem;
+    padding: 2px 4px;
+    overflow: hidden;
+    text-decoration: none;
+    z-index: 2;
+}
+
+.week-event-block:hover {
+    color: #fff;
+    filter: brightness(0.92);
+}
+
+/* Виджет "свободно сейчас" */
+.free-now-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #F3FBF6;
+    color: #1F7A45;
+    border: 1px solid #CDEFDA;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.free-now-badge .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #2E9E5B;
+    display: inline-block;
+}
+
+/* Пустое состояние без внешних картинок */
+.empty-state-icon {
+    font-size: 4rem;
+    line-height: 1;
+    margin-bottom: 12px;
+}
+
+@media (max-width: 767px) {
+    .calendar-cell {
+        min-height: 70px;
+        font-size: 0.8rem;
+    }
+}
