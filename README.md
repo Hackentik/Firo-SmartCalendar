@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🍊 Firo SmartCalendar
+# Firo SmartCalendar
 
 **Веб-приложение для бронирования переговорных комнат в офисе**
 
@@ -63,7 +63,7 @@
 
 ```bash
 # 1. Клонируем репозиторий
-git clone https://github.com/<your-username>/firo-smartcalendar.git
+git clone https://github.com/Hackentik/firo-smartcalendar.git
 cd firo-smartcalendar
 
 # 2. Создаём виртуальное окружение
