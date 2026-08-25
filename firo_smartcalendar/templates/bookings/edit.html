@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header card-header-accent">
+                <h4 class="mb-0"><i class="bi bi-pencil"></i> Редактирование бронирования</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="bookingForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="mb-3">
+                        <label class="form-label">Создано:</label>
+                        <p class="form-control-static">{{ booking.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Название мероприятия *</label>
+                        <input type="text" class="form-control" id="title" name="title"
+                               value="{{ booking.title }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="room_id" class="form-label">Кабинет *</label>
+                        <select class="form-select" id="room_id" name="room_id" required>
+                            {% for room in rooms %}
+                            <option value="{{ room.id }}" data-capacity="{{ room.capacity or '' }}"
+                                    {% if room.id == booking.room_id %}selected{% endif %}>
+                                {{ room.name }} ({{ room.capacity_label() }}) - {{ room.equipment or 'без оборудования' }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text text-danger d-none" id="capacityWarning">
+                            <i class="bi bi-exclamation-triangle"></i> Участников больше, чем вместимость выбранного кабинета
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="start_time" class="form-label">Начало *</label>
+                            <input type="datetime-local" class="form-control" id="start_time"
+                                   name="start_time" value="{{ booking.start_time.strftime('%Y-%m-%dT%H:%M') }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="end_time" class="form-label">Окончание *</label>
+                            <input type="datetime-local" class="form-control" id="end_time"
+                                   name="end_time" value="{{ booking.end_time.strftime('%Y-%m-%dT%H:%M') }}" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3" id="availabilityIndicator" style="display: none;">
+                        <div class="alert" role="alert">
+                            Проверка доступности...
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Участники</label>
+                        <div id="participantsContainer">
+                            {% if participants_list %}
+                                {% for participant_id in participants_list %}
+                                <div class="input-group mb-2">
+                                    <select class="form-select participant-select" name="participants[]">
+                                        <option value="">Выберите участника...</option>
+                                        {% for user in users %}
+                                        <option value="{{ user.id }}"
+                                                {% if user.id|string == participant_id %}selected{% endif %}>
+                                            {{ user.username }}
+                                            {% if user.is_admin %}(админ){% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button" class="btn btn-outline-danger remove-participant">×</button>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                            <div class="input-group mb-2">
+                                <select class="form-select participant-select" name="participants[]">
+                                    <option value="">Выберите участника...</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>
+                                        {{ user.username }}
+                                        {% if user.is_admin %}(админ){% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-outline-danger remove-participant" style="display: none;">×</button>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-firo" id="addParticipant">
+                            + Добавить участника
+                        </button>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="description" name="description"
+                                  rows="3">{{ booking.description or '' }}</textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('bookings_list') }}" class="btn btn-secondary">
+                            ← К списку
+                        </a>
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('export_booking_ics', booking_id=booking.id) }}"
+                               class="btn btn-outline-secondary" title="Скачать .ics для календаря">
+                                <i class="bi bi-download"></i> .ics
+                            </a>
+                            <button type="submit" class="btn btn-firo" id="submitBtn">
+                                Сохранить изменения
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('bookingForm');
+    const startTime = document.getElementById('start_time');
+    const endTime = document.getElementById('end_time');
+    const roomSelect = document.getElementById('room_id');
+    const availabilityIndicator = document.getElementById('availabilityIndicator');
+    const submitBtn = document.getElementById('submitBtn');
+    const capacityWarning = document.getElementById('capacityWarning');
+    const bookingId = {{ booking.id }};
+
+    async function checkAvailability() {
+        const roomId = roomSelect.value;
+        const start = startTime.value;
+        const end = endTime.value;
+
+        if (!roomId || !start || !end) {
+            availabilityIndicator.style.display = 'none';
+            return;
+        }
+
+        if (new Date(start) >= new Date(end)) {
+            availabilityIndicator.style.display = 'block';
+            availabilityIndicator.className = 'alert alert-danger';
+            availabilityIndicator.innerHTML = '<i class="bi bi-x-circle"></i> Время окончания должно быть позже времени начала';
+            submitBtn.disabled = true;
+            return;
+        }
+
+        availabilityIndicator.style.display = 'block';
+        availabilityIndicator.className = 'alert alert-info';
+        availabilityIndicator.innerHTML = '⏳ Проверяем доступность...';
+
+        try {
+            const response = await fetch(`/api/check_availability?room_id=${roomId}&start_time=${start}&end_time=${end}&booking_id=${bookingId}`);
+            const data = await response.json();
+
+            if (data.available) {
+                availabilityIndicator.className = 'alert alert-success';
+                availabilityIndicator.innerHTML = '<i class="bi bi-check-circle"></i> Это время свободно!';
+                submitBtn.disabled = false;
+            } else {
+                availabilityIndicator.className = 'alert alert-danger';
+                availabilityIndicator.innerHTML = `<i class="bi bi-x-circle"></i> Это время занято. ${data.message || ''}`;
+                submitBtn.disabled = true;
+            }
+        } catch (error) {
+            availabilityIndicator.className = 'alert alert-warning';
+            availabilityIndicator.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Не удалось проверить доступность';
+            submitBtn.disabled = false;
+        }
+    }
+
+    function checkCapacity() {
+        const selectedOption = roomSelect.options[roomSelect.selectedIndex];
+        const capacity = selectedOption ? parseInt(selectedOption.dataset.capacity, 10) : null;
+        const participantsCount = document.querySelectorAll('.participant-select').length;
+
+        if (capacity && participantsCount > capacity) {
+            capacityWarning.classList.remove('d-none');
+        } else {
+            capacityWarning.classList.add('d-none');
+        }
+    }
+
+    startTime.addEventListener('change', checkAvailability);
+    endTime.addEventListener('change', checkAvailability);
+    roomSelect.addEventListener('change', function () {
+        checkAvailability();
+        checkCapacity();
+    });
+
+    document.getElementById('addParticipant').addEventListener('click', function () {
+        const container = document.getElementById('participantsContainer');
+        const newParticipant = document.createElement('div');
+        newParticipant.className = 'input-group mb-2';
+        newParticipant.innerHTML = `
+            <select class="form-select participant-select" name="participants[]">
+                <option value="">Выберите участника...</option>
+                {% for user in users %}
+                <option value="{{ user.id }}">
+                    {{ user.username }}
+                    {% if user.is_admin %}(админ){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="button" class="btn btn-outline-danger remove-participant">×</button>
+        `;
+        container.appendChild(newParticipant);
+
+        newParticipant.querySelector('.remove-participant').addEventListener('click', function () {
+            newParticipant.remove();
+            checkCapacity();
+        });
+        checkCapacity();
+    });
+
+    document.querySelectorAll('.remove-participant').forEach(btn => {
+        btn.addEventListener('click', function () {
+            if (document.querySelectorAll('.input-group').length > 1) {
+                this.closest('.input-group').remove();
+                checkCapacity();
+            }
+        });
+    });
+
+    checkCapacity();
+});
+</script>
+{% endblock %}

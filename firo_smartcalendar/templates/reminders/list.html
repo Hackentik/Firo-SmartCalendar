@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="text-firo">
+        <i class="bi bi-bell"></i>
+        {% if current_user.is_admin %}
+            Все напоминания
+        {% else %}
+            Мои напоминания
+        {% endif %}
+    </h2>
+
+    <a href="{{ url_for('new_reminder') }}" class="btn btn-firo">
+        <i class="bi bi-plus-lg"></i> Новое напоминание
+    </a>
+</div>
+
+{% if reminders %}
+    <div class="row">
+        {% for reminder in reminders %}
+        <div class="col-md-6 mb-3">
+            <div class="card booking-card {% if reminder.is_past() %}past{% endif %}" style="border-left-color: #6C7A8C;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <h5 class="card-title mb-1"><i class="bi bi-bell text-secondary"></i> {{ reminder.title }}</h5>
+                        {% if reminder.is_past() %}
+                        <span class="badge bg-secondary">Прошло</span>
+                        {% else %}
+                        <span class="badge" style="background-color: #6C7A8C;">Предстоит</span>
+                        {% endif %}
+                    </div>
+
+                    <p class="card-text mb-2">
+                        <strong><i class="bi bi-calendar3"></i> Дата и время:</strong> {{ reminder.start_time.strftime('%d.%m.%Y %H:%M') }}<br>
+                        {% if reminder.room %}
+                        <strong><i class="bi bi-building"></i> Кабинет:</strong> {{ reminder.room.name }}<br>
+                        {% endif %}
+                        <strong><i class="bi bi-person"></i> Автор:</strong> {{ reminder.creator.username }}
+                    </p>
+
+                    {% set participant_users = reminder.get_participants_users() %}
+                    {% if participant_users %}
+                    <p class="mb-2">
+                        <strong>Упомянуты:</strong>
+                        {% for participant in participant_users %}
+                            <span class="badge bg-light text-dark border">{{ participant.username }}</span>
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+
+                    {% if reminder.description %}
+                    <p class="mb-2"><i class="bi bi-file-text"></i> {{ reminder.description }}</p>
+                    {% endif %}
+
+                    <div class="d-flex justify-content-end gap-2">
+                        {% if reminder.user_id == current_user.id or current_user.is_admin %}
+                        <a href="{{ url_for('edit_reminder', reminder_id=reminder.id) }}"
+                           class="btn btn-sm btn-outline-firo">
+                            <i class="bi bi-pencil"></i> Редактировать
+                        </a>
+                        <form method="POST" action="{{ url_for('delete_reminder', reminder_id=reminder.id) }}"
+                              style="display: inline;"
+                              onsubmit="return confirm('Удалить это напоминание?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i> Удалить
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="text-center py-5">
+        <div class="empty-state-icon"><i class="bi bi-bell-slash display-4 d-block mb-2"></i></div>
+        <h4 class="text-muted">Пока нет напоминаний</h4>
+        <p class="mb-4">Создайте напоминание, если бронировать кабинет не нужно, а просто не забыть о чём-то.</p>
+        <a href="{{ url_for('new_reminder') }}" class="btn btn-firo btn-lg">
+            <i class="bi bi-plus-lg"></i> Новое напоминание
+        </a>
+    </div>
+{% endif %}
+{% endblock %}

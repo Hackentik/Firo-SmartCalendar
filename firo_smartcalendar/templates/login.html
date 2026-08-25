@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-header card-header-accent text-center py-3">
+                <h4 class="mb-0">Вход в Firo SmartCalendar</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Имя пользователя</label>
+                        <input type="text" class="form-control" id="username" name="username"
+                               placeholder="Введите ваш логин" required autofocus>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Пароль</label>
+                        <input type="password" class="form-control" id="password" name="password"
+                               placeholder="••••••••" required>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                        <label class="form-check-label" for="remember">Запомнить меня</label>
+                    </div>
+
+                    <button type="submit" class="btn btn-firo w-100 py-2">
+                        Войти в систему
+                    </button>
+                </form>
+
+                <hr class="my-4">
+
+                <div class="text-center">
+                    <p class="mb-0">Нет аккаунта? <a href="{{ url_for('register') }}" class="text-firo">Зарегистрируйтесь</a></p>
+                    <small class="text-muted">Новые заявки на регистрацию подтверждает администратор</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-3 text-firo">
+            <small>Управляйте кабинетами с комфортом</small>
+        </div>
+    </div>
+</div>
+{% endblock %}
