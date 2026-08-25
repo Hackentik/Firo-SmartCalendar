@@ -173,7 +173,7 @@ class Booking(db.Model):
         return self.start_time <= now <= self.end_time
 
     def overcapacity(self):
-        """Проверяет, превышает ли число участников вместимость комнаты (для комнат без лимита - всегда False)"""
+        """Проверяет, превышает ли число участников вместимость кабинета (для кабинетов без лимита - всегда False)"""
         if not self.room or not self.room.capacity:
             return False
         participants_count = len(self.get_participants_list())
@@ -181,3 +181,75 @@ class Booking(db.Model):
 
     def __repr__(self):
         return f'<Booking {self.title} at {self.start_time}>'
+
+
+class Reminder(db.Model):
+    """
+    НОВОЕ: модель напоминания.
+
+    В отличие от Booking, напоминание не бронирует кабинет и не проверяется
+    на конфликт по времени - это просто пометка на календаре ("не забыть про X").
+    Кабинет указывать не обязательно (room_id может быть NULL).
+    """
+    __tablename__ = 'reminders'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)  # О чём напоминание
+    description = db.Column(db.Text)  # Подробности
+    room_id = db.Column(db.Integer, db.ForeignKey('rooms.id'), nullable=True)  # Кабинет (необязательно)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Кто создал
+    start_time = db.Column(db.DateTime, nullable=False)  # На какое время напоминание
+    participants = db.Column(db.Text)  # Упомянутые пользователи (JSON со списком ID) - им придёт уведомление
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    room = db.relationship('Room', backref='reminders')
+    creator = db.relationship('User', backref='reminders', foreign_keys=[user_id])
+
+    def get_participants_list(self):
+        """Список ID упомянутых пользователей (строки), аналогично Booking.get_participants_list"""
+        if self.participants:
+            try:
+                return [p for p in json.loads(self.participants) if p]
+            except (ValueError, TypeError):
+                return []
+        return []
+
+    def get_participants_users(self):
+        """Возвращает объекты User для упомянутых участников, в исходном порядке"""
+        ids = self.get_participants_list()
+        if not ids:
+            return []
+        try:
+            int_ids = [int(i) for i in ids]
+        except (TypeError, ValueError):
+            return []
+        users = User.query.filter(User.id.in_(int_ids)).all()
+        users_by_id = {u.id: u for u in users}
+        return [users_by_id[i] for i in int_ids if i in users_by_id]
+
+    def is_past(self):
+        return self.start_time < datetime.now()
+
+    def __repr__(self):
+        return f'<Reminder {self.title} at {self.start_time}>'
+
+
+class Notification(db.Model):
+    """
+    НОВОЕ: внутреннее уведомление пользователю - например, "вас упомянули в напоминании".
+    Показывается колокольчиком в навигации со счётчиком непрочитанных.
+    """
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Кому адресовано
+    message = db.Column(db.String(300), nullable=False)  # Текст уведомления
+    link_reminder_id = db.Column(db.Integer, db.ForeignKey('reminders.id'), nullable=True)  # Ссылка на напоминание
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='notifications', foreign_keys=[user_id])
+    reminder = db.relationship('Reminder', backref=db.backref('notifications', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<Notification for user={self.user_id}: {self.message[:30]}>'

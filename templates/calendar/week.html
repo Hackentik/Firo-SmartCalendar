@@ -11,7 +11,7 @@
         </h2>
         <span class="free-now-badge">
             <span class="dot"></span>
-            Свободно сейчас: {{ free_rooms_now }} из {{ rooms|length }} комнат
+            Свободно сейчас: {{ free_rooms_now }} из {{ rooms|length }} кабинетов
         </span>
     </div>
 
@@ -79,6 +79,17 @@
                        href="{{ url_for('edit_booking', booking_id=booking.id) }}"
                        title="{{ booking.title }} · {{ booking.room.name }} · {{ booking.start_time.strftime('%H:%M') }}–{{ booking.end_time.strftime('%H:%M') }}">
                         {{ booking.start_time.strftime('%H:%M') }} {{ booking.title }}
+                    </a>
+                {% endfor %}
+
+                <!-- НОВОЕ: блоки напоминаний - визуально отличаются пунктирной рамкой и колокольчиком -->
+                {% for item in day.reminder_layouts %}
+                    {% set reminder = item.reminder %}
+                    <a class="week-event-block is-reminder"
+                       style="top: {{ item.top_pct }}%; height: {{ item.height_pct }}%;"
+                       href="{{ url_for('edit_reminder', reminder_id=reminder.id) }}"
+                       title="{{ reminder.title }}{% if reminder.room %} · {{ reminder.room.name }}{% endif %} · {{ reminder.start_time.strftime('%H:%M') }}">
+                        <i class="bi bi-bell"></i> {{ reminder.start_time.strftime('%H:%M') }} {{ reminder.title }}
                     </a>
                 {% endfor %}
             </div>

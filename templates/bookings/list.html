@@ -36,7 +36,7 @@
                     </div>
 
                     <p class="card-text mb-2">
-                        <strong><i class="bi bi-building"></i> Комната:</strong> {{ booking.room.name }}<br>
+                        <strong><i class="bi bi-building"></i> Кабинет:</strong> {{ booking.room.name }}<br>
                         <strong><i class="bi bi-calendar3"></i> Дата:</strong> {{ booking.start_time.strftime('%d.%m.%Y') }}<br>
                         <strong>⏰ Время:</strong> {{ booking.start_time.strftime('%H:%M') }} - {{ booking.end_time.strftime('%H:%M') }}<br>
                         <strong><i class="bi bi-person"></i> Организатор:</strong> {{ booking.user.username }}
@@ -56,7 +56,7 @@
                     {% if booking.overcapacity() %}
                     <p class="text-danger small mb-2">
                         <i class="bi bi-exclamation-triangle"></i>
-                        Участников больше, чем вместимость комнаты ({{ booking.room.capacity }} чел.)
+                        Участников больше, чем вместимость кабинета ({{ booking.room.capacity }} чел.)
                     </p>
                     {% endif %}
 
@@ -96,7 +96,7 @@
     <div class="text-center py-5">
         <div class="empty-state-icon"><i class="bi bi-calendar-x display-4 d-block mb-2"></i></div>
         <h4 class="text-muted">{% if current_user.is_admin %}Бронирований пока нет{% else %}У вас пока нет бронирований{% endif %}</h4>
-        <p class="mb-4">Забронируйте переговорную комнату прямо сейчас!</p>
+        <p class="mb-4">Забронируйте кабинет прямо сейчас!</p>
         <a href="{{ url_for('new_booking') }}" class="btn btn-firo btn-lg">
             <i class="bi bi-plus-lg"></i> Забронировать кабинет
         </a>

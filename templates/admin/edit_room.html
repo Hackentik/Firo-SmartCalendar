@@ -5,14 +5,14 @@
     <div class="col-md-8">
         <div class="card">
             <div class="card-header card-header-accent">
-                <h4 class="mb-0"><i class="bi bi-pencil"></i> Редактирование комнаты: {{ room.name }}</h4>
+                <h4 class="mb-0"><i class="bi bi-pencil"></i> Редактирование кабинета: {{ room.name }}</h4>
             </div>
             <div class="card-body">
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="mb-3">
-                        <label for="name" class="form-label">Название комнаты *</label>
+                        <label for="name" class="form-label">Название кабинета *</label>
                         <input type="text" class="form-control" id="name" name="name"
                                value="{{ room.name }}" required>
                     </div>
@@ -37,7 +37,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="description" class="form-label">Описание комнаты</label>
+                        <label for="description" class="form-label">Описание кабинета</label>
                         <textarea class="form-control" id="description" name="description"
                                   rows="3">{{ room.description or '' }}</textarea>
                     </div>
@@ -51,14 +51,14 @@
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="is_active" name="is_active"
                                {% if room.is_active %}checked{% endif %}>
-                        <label class="form-check-label" for="is_active">Комната активна (доступна для бронирования)</label>
+                        <label class="form-check-label" for="is_active">Кабинет активен (доступен для бронирования)</label>
                     </div>
 
                     <hr>
 
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('admin_rooms') }}" class="btn btn-secondary">
-                            ← К списку комнат
+                            ← К списку кабинетов
                         </a>
                         <button type="submit" class="btn btn-firo">
                             Сохранить изменения

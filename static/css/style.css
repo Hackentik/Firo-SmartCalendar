@@ -329,6 +329,27 @@ a {
     margin-bottom: 12px;
 }
 
+/* НОВОЕ: колокольчик уведомлений в навигации */
+.notif-badge {
+    position: absolute;
+    top: 2px;
+    right: -4px;
+    font-size: 0.6rem;
+    padding: 2px 5px;
+}
+
+.notif-dropdown {
+    width: 320px;
+    max-width: 90vw;
+}
+
+/* НОВОЕ: пилюли и блоки напоминаний на календаре - отличаются от броней пунктирной рамкой */
+.day-event-pill.is-reminder,
+.week-event-block.is-reminder {
+    background-color: #6C7A8C !important;
+    border: 1px dashed rgba(255, 255, 255, 0.6);
+}
+
 @media (max-width: 767px) {
     .calendar-cell {
         min-height: 70px;

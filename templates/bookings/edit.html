@@ -23,7 +23,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="room_id" class="form-label">Переговорная комната *</label>
+                        <label for="room_id" class="form-label">Кабинет *</label>
                         <select class="form-select" id="room_id" name="room_id" required>
                             {% for room in rooms %}
                             <option value="{{ room.id }}" data-capacity="{{ room.capacity or '' }}"
@@ -33,7 +33,7 @@
                             {% endfor %}
                         </select>
                         <div class="form-text text-danger d-none" id="capacityWarning">
-                            <i class="bi bi-exclamation-triangle"></i> Участников больше, чем вместимость выбранной комнаты
+                            <i class="bi bi-exclamation-triangle"></i> Участников больше, чем вместимость выбранного кабинета
                         </div>
                     </div>
 

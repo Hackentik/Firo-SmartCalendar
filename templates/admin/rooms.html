@@ -4,17 +4,17 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="text-firo">
         <i class="bi bi-building"></i>
-        Управление переговорными комнатами
+        Управление кабинетами
     </h2>
 
     <a href="{{ url_for('new_room') }}" class="btn btn-firo">
-        <i class="bi bi-plus-lg"></i> Добавить новую комнату
+        <i class="bi bi-plus-lg"></i> Добавить новый кабинет
     </a>
 </div>
 
 <div class="card">
     <div class="card-header card-header-accent">
-        <h5 class="mb-0">Список всех комнат</h5>
+        <h5 class="mb-0">Список всех кабинетов</h5>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -64,7 +64,7 @@
                                 {% if room.is_active %}
                                 <form method="POST" action="{{ url_for('delete_room', room_id=room.id) }}"
                                       style="display: inline;"
-                                      onsubmit="return confirm('Деактивировать комнату? Все будущие бронирования будут отменены!');">
+                                      onsubmit="return confirm('Деактивировать кабинет? Все будущие бронирования будут отменены!');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-outline-danger">
                                         <i class="bi bi-trash"></i>
@@ -73,7 +73,7 @@
                                 {% else %}
                                 <form method="POST" action="{{ url_for('delete_room', room_id=room.id) }}"
                                       style="display: inline;"
-                                      onsubmit="return confirm('Включить комнату?');">
+                                      onsubmit="return confirm('Включить кабинет?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-outline-success">
                                         <i class="bi bi-check-circle"></i>
@@ -95,7 +95,7 @@
         <div class="card text-center">
             <div class="card-body">
                 <h3 class="text-firo">{{ rooms|selectattr('is_active', 'equalto', true)|list|length }}</h3>
-                <p class="text-muted mb-0">Активных комнат</p>
+                <p class="text-muted mb-0">Активных кабинетов</p>
             </div>
         </div>
     </div>
@@ -103,7 +103,7 @@
         <div class="card text-center">
             <div class="card-body">
                 <h3 class="text-firo">{{ rooms|selectattr('is_active', 'equalto', false)|list|length }}</h3>
-                <p class="text-muted mb-0">Неактивных комнат</p>
+                <p class="text-muted mb-0">Неактивных кабинетов</p>
             </div>
         </div>
     </div>

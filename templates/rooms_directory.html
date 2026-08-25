@@ -3,7 +3,7 @@
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <h2 class="text-firo mb-0">
-        <i class="bi bi-building"></i> Переговорные комнаты
+        <i class="bi bi-building"></i> Кабинеты
     </h2>
     <span class="free-now-badge">
         <span class="dot"></span>
@@ -44,9 +44,9 @@
 </div>
 {% else %}
 <div class="alert alert-warning">
-    Пока не добавлено ни одной активной комнаты.
+    Пока не добавлено ни одного активного кабинета.
     {% if current_user.is_admin %}
-        <a href="{{ url_for('new_room') }}">Добавить первую комнату →</a>
+        <a href="{{ url_for('new_room') }}">Добавить первый кабинет →</a>
     {% endif %}
 </div>
 {% endif %}

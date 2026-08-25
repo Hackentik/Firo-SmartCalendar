@@ -1,5 +1,5 @@
 # app.py - главный файл приложения Firo SmartCalendar
-# Система для удобного бронирования переговорных комнат
+# Система для удобного бронирования кабинетов
 # Цветовая схема: оранжевый (#FF6B35) - основной цвет
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_user, login_required, logout_user, current_user
@@ -13,7 +13,7 @@ import os
 from extensions import db, login_manager, csrf
 
 # Импортируем модели
-from models import User, Room, Booking
+from models import User, Room, Booking, Reminder, Notification
 
 # Создаем приложение Flask
 app = Flask(__name__)
@@ -58,6 +58,20 @@ def inject_pending_count():
         count = User.query.filter_by(approval_status='pending').count()
         return {'pending_registrations_count': count}
     return {'pending_registrations_count': 0}
+
+
+@app.context_processor
+def inject_notifications():
+    """
+    НОВОЕ: колокольчик в навигации - непрочитанные уведомления текущего пользователя
+    (например, "вас упомянули в напоминании"), плюс несколько последних для выпадающего списка.
+    """
+    if current_user.is_authenticated:
+        unread_count = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+        recent = Notification.query.filter_by(user_id=current_user.id) \
+            .order_by(Notification.created_at.desc()).limit(5).all()
+        return {'unread_notifications_count': unread_count, 'recent_notifications': recent}
+    return {'unread_notifications_count': 0, 'recent_notifications': []}
 
 
 def admin_required(f):
@@ -217,7 +231,7 @@ def calendar_view():
 
 
 def _free_rooms_right_now(rooms):
-    """НОВОЕ: считает сколько комнат свободно прямо сейчас - используется в виджете календаря"""
+    """НОВОЕ: считает сколько кабинетов свободно прямо сейчас - используется в виджете календаря"""
     now = datetime.now()
     free = 0
     for room in rooms:
@@ -242,10 +256,23 @@ def show_month_calendar(current_date, rooms):
         Booking.end_time >= start_of_month
     ).order_by(Booking.start_time).all()
 
-    bookings_by_day = {}
+    # НОВОЕ: напоминания за месяц - показываем на календаре вместе с бронями,
+    # но отдельным значком (колокольчик), так как это не бронирование кабинета
+    month_reminders = Reminder.query.filter(
+        Reminder.start_time >= start_of_month,
+        Reminder.start_time <= end_of_month
+    ).order_by(Reminder.start_time).all()
+
+    # Объединяем брони и напоминания в единый список событий по дням, отсортированный по времени
+    day_items = {}
     for booking in month_bookings:
         day_key = booking.start_time.day
-        bookings_by_day.setdefault(day_key, []).append(booking)
+        day_items.setdefault(day_key, []).append({'kind': 'booking', 'obj': booking, 'time': booking.start_time})
+    for reminder in month_reminders:
+        day_key = reminder.start_time.day
+        day_items.setdefault(day_key, []).append({'kind': 'reminder', 'obj': reminder, 'time': reminder.start_time})
+    for day_key in day_items:
+        day_items[day_key].sort(key=lambda item: item['time'])
 
     # Навигация по месяцам вперед/назад
     prev_month_date = (start_of_month - timedelta(days=1)).replace(day=1)
@@ -262,7 +289,7 @@ def show_month_calendar(current_date, rooms):
                             month_name=russian_months[current_date.month],
                             year=current_date.year,
                             rooms=rooms,
-                            bookings_by_day=bookings_by_day,
+                            day_items=day_items,
                             prev_month_date=prev_month_date,
                             next_month_date=next_month_date,
                             free_rooms_now=_free_rooms_right_now(rooms),
@@ -271,7 +298,7 @@ def show_month_calendar(current_date, rooms):
 
 def _booking_layout(booking, day, work_start, work_end):
     """
-    НОВОЕ: считает вертикальное положение блока бронирования в сетке недели
+    НОВОЕ: считает вертикальное положение блока (брони или напоминания) в сетке недели
     (в процентах от рабочего диапазона часов), обрезая его границами дня и рабочих часов.
     """
     day_start_hour = work_start
@@ -296,6 +323,23 @@ def _booking_layout(booking, day, work_start, work_end):
     return {'booking': booking, 'top_pct': round(top_pct, 1), 'height_pct': round(height_pct, 1)}
 
 
+def _reminder_layout(reminder, day, work_start, work_end):
+    """НОВОЕ: то же самое, что _booking_layout, но для напоминаний - у них нет времени окончания,
+    поэтому визуально отображаем их как короткий 30-минутный блок."""
+
+    class _FakeSpan:
+        """Обёртка, чтобы напоминание можно было передать в _booking_layout как если бы у него было end_time"""
+        def __init__(self, start_time, end_time):
+            self.start_time = start_time
+            self.end_time = end_time
+
+    span = _FakeSpan(reminder.start_time, reminder.start_time + timedelta(minutes=30))
+    layout = _booking_layout(span, day, work_start, work_end)
+    layout['reminder'] = reminder
+    del layout['booking']
+    return layout
+
+
 def show_week_calendar(current_date, rooms):
     """Показывает календарь на неделю"""
     start_of_week = current_date - timedelta(days=current_date.weekday())
@@ -312,12 +356,20 @@ def show_week_calendar(current_date, rooms):
             Booking.end_time >= day_start
         ).order_by(Booking.start_time).all()
 
-        layouts = [_booking_layout(b, day.date(), WORK_HOUR_START, WORK_HOUR_END) for b in day_bookings]
+        # НОВОЕ: напоминания за этот день недели
+        day_reminders = Reminder.query.filter(
+            Reminder.start_time >= day_start,
+            Reminder.start_time <= day_end
+        ).order_by(Reminder.start_time).all()
+
+        booking_layouts = [_booking_layout(b, day.date(), WORK_HOUR_START, WORK_HOUR_END) for b in day_bookings]
+        reminder_layouts = [_reminder_layout(r, day.date(), WORK_HOUR_START, WORK_HOUR_END) for r in day_reminders]
 
         week_days.append({
             'date': day,
             'bookings': day_bookings,
-            'booking_layouts': layouts,
+            'booking_layouts': booking_layouts,
+            'reminder_layouts': reminder_layouts,
             'is_today': day.date() == datetime.now().date()
         })
 
@@ -340,8 +392,8 @@ def show_week_calendar(current_date, rooms):
 @login_required
 def rooms_directory():
     """
-    НОВОЕ: публичный каталог комнат, доступный всем пользователям (не только админам) -
-    вместимость, оборудование и кнопка быстрого бронирования конкретной комнаты.
+    НОВОЕ: публичный каталог кабинетов, доступный всем пользователям (не только админам) -
+    вместимость, оборудование и кнопка быстрого бронирования конкретного кабинета.
     """
     rooms = Room.query.filter_by(is_active=True).order_by(Room.name).all()
     return render_template('rooms_directory.html', rooms=rooms, free_rooms_now=_free_rooms_right_now(rooms))
@@ -430,7 +482,7 @@ def new_booking():
 
         room = Room.query.get(room_id)
         if not room or not room.is_active:
-            flash('Выбранная комната недоступна для бронирования', 'danger')
+            flash('Выбранный кабинет недоступен для бронирования', 'danger')
             return redirect(url_for('new_booking'))
 
         # Проверяем, не занято ли это время
@@ -458,14 +510,14 @@ def new_booking():
             db.session.add(booking)
             db.session.commit()
 
-            # НОВОЕ: предупреждаем, если участников больше, чем вместимость комнаты
+            # НОВОЕ: предупреждаем, если участников больше, чем вместимость кабинета
             if booking.overcapacity():
                 flash(
-                    f'Внимание: участников больше вместимости комнаты '
-                    f'({len(participants)} чел. в комнате на {room.capacity})', 'warning'
+                    f'Внимание: участников больше вместимости кабинета '
+                    f'({len(participants)} чел. в кабинете на {room.capacity})', 'warning'
                 )
 
-            flash(f'Отлично! Комната забронирована на {start_time.strftime("%d.%m.%Y %H:%M")}', 'success')
+            flash(f'Отлично! Кабинет забронирован на {start_time.strftime("%d.%m.%Y %H:%M")}', 'success')
             return redirect(url_for('calendar_view'))
 
         except Exception as e:
@@ -552,7 +604,7 @@ def edit_booking(booking_id):
             db.session.commit()
 
             if booking.overcapacity():
-                flash('Внимание: участников больше, чем вместимость выбранной комнаты', 'warning')
+                flash('Внимание: участников больше, чем вместимость выбранного кабинета', 'warning')
 
             flash('Бронирование успешно обновлено!', 'success')
             return redirect(url_for('calendar_view'))
@@ -589,12 +641,222 @@ def delete_booking(booking_id):
         db.session.delete(booking)
         db.session.commit()
 
-        flash(f'Бронирование комнаты "{room_name}" на {booking_time} удалено', 'success')
+        flash(f'Бронирование кабинета "{room_name}" на {booking_time} удалено', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Ошибка при удалении: {str(e)}', 'danger')
 
     return redirect(request.referrer or url_for('bookings_list'))
+
+
+# === НАПОМИНАНИЯ (не бронирование кабинета, просто пометка на календаре) ===
+
+@app.route('/reminders')
+@login_required
+def reminders_list():
+    """Список напоминаний: свои созданные + те, где тебя упомянули (админ видит все)"""
+    if current_user.is_admin:
+        reminders = Reminder.query.order_by(Reminder.start_time.desc()).all()
+    else:
+        all_reminders = Reminder.query.order_by(Reminder.start_time.desc()).all()
+        # Показываем те, что создал сам пользователь, или где он в участниках
+        reminders = [
+            r for r in all_reminders
+            if r.user_id == current_user.id or str(current_user.id) in r.get_participants_list()
+        ]
+
+    return render_template('reminders/list.html', reminders=reminders)
+
+
+@app.route('/reminder/new', methods=['GET', 'POST'])
+@login_required
+def new_reminder():
+    """Создание напоминания - кабинет указывать не обязательно"""
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        room_id = request.form.get('room_id') or None  # НОВОЕ: кабинет необязателен
+        start_time = parse_datetime_local(request.form.get('start_time'))
+        participants = [p for p in request.form.getlist('participants[]') if p]
+
+        if not title or not start_time:
+            flash('Укажите название и время напоминания', 'danger')
+            return redirect(url_for('new_reminder'))
+
+        if room_id:
+            room = Room.query.get(room_id)
+            if not room or not room.is_active:
+                flash('Выбранный кабинет недоступен', 'danger')
+                return redirect(url_for('new_reminder'))
+
+        try:
+            reminder = Reminder(
+                title=title,
+                description=description,
+                room_id=room_id,
+                user_id=current_user.id,
+                start_time=start_time,
+                participants=json.dumps(participants, ensure_ascii=False)
+            )
+            db.session.add(reminder)
+            db.session.commit()
+
+            # НОВОЕ: упомянутым участникам приходит внутреннее уведомление (колокольчик в навигации)
+            _notify_participants(reminder, participants)
+
+            flash(f'Напоминание «{title}» создано на {start_time.strftime("%d.%m.%Y %H:%M")}', 'success')
+            return redirect(url_for('reminders_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Что-то пошло не так: {str(e)}', 'danger')
+            return redirect(url_for('new_reminder'))
+
+    rooms = Room.query.filter_by(is_active=True).all()
+    users = User.query.filter_by(approval_status='approved').order_by(User.username).all()
+    now = datetime.now()
+    start_default = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
+
+    return render_template('reminders/new.html', rooms=rooms, users=users,
+                            start_default=start_default.strftime('%Y-%m-%dT%H:%M'))
+
+
+@app.route('/reminder/<int:reminder_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_reminder(reminder_id):
+    """Редактирование напоминания"""
+    reminder = Reminder.query.get_or_404(reminder_id)
+
+    if reminder.user_id != current_user.id and not current_user.is_admin:
+        flash('Редактировать напоминание может только его автор или администратор', 'danger')
+        return redirect(url_for('reminders_list'))
+
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        room_id = request.form.get('room_id') or None
+        start_time = parse_datetime_local(request.form.get('start_time'))
+        new_participants = [p for p in request.form.getlist('participants[]') if p]
+
+        if not title or not start_time:
+            flash('Укажите название и время напоминания', 'danger')
+            return redirect(url_for('edit_reminder', reminder_id=reminder_id))
+
+        old_participants = set(reminder.get_participants_list())
+
+        try:
+            reminder.title = title
+            reminder.description = description
+            reminder.room_id = room_id
+            reminder.start_time = start_time
+            reminder.participants = json.dumps(new_participants, ensure_ascii=False)
+            db.session.commit()
+
+            # НОВОЕ: уведомляем только тех, кого добавили заново - чтобы не спамить остальных при каждом сохранении
+            newly_added = [p for p in new_participants if p not in old_participants]
+            _notify_participants(reminder, newly_added)
+
+            flash('Напоминание обновлено', 'success')
+            return redirect(url_for('reminders_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Ошибка при обновлении: {str(e)}', 'danger')
+
+    rooms = Room.query.filter_by(is_active=True).all()
+    users = User.query.filter_by(approval_status='approved').order_by(User.username).all()
+    participants_list = reminder.get_participants_list()
+
+    return render_template('reminders/edit.html', reminder=reminder, rooms=rooms, users=users,
+                            participants_list=participants_list)
+
+
+@app.route('/reminder/<int:reminder_id>/delete', methods=['POST'])
+@login_required
+def delete_reminder(reminder_id):
+    """Удаление напоминания"""
+    reminder = Reminder.query.get_or_404(reminder_id)
+
+    if reminder.user_id != current_user.id and not current_user.is_admin:
+        flash('У вас нет прав на удаление этого напоминания', 'danger')
+        return redirect(url_for('reminders_list'))
+
+    try:
+        title = reminder.title
+        db.session.delete(reminder)
+        db.session.commit()
+        flash(f'Напоминание «{title}» удалено', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Ошибка при удалении: {str(e)}', 'danger')
+
+    return redirect(request.referrer or url_for('reminders_list'))
+
+
+def _notify_participants(reminder, participant_ids):
+    """НОВОЕ: создаёт внутренние уведомления для упомянутых в напоминании пользователей"""
+    if not participant_ids:
+        return
+    try:
+        int_ids = [int(p) for p in participant_ids]
+    except (TypeError, ValueError):
+        return
+
+    for uid in int_ids:
+        if uid == reminder.user_id:
+            continue  # не уведомляем автора о его собственном напоминании
+        notification = Notification(
+            user_id=uid,
+            message=f'{reminder.creator.username} упомянул(а) вас в напоминании «{reminder.title}» '
+                     f'на {reminder.start_time.strftime("%d.%m.%Y %H:%M")}',
+            link_reminder_id=reminder.id
+        )
+        db.session.add(notification)
+    db.session.commit()
+
+
+# === УВЕДОМЛЕНИЯ ===
+
+@app.route('/notifications')
+@login_required
+def notifications_list():
+    """Список уведомлений текущего пользователя"""
+    notifications = Notification.query.filter_by(user_id=current_user.id) \
+        .order_by(Notification.created_at.desc()).all()
+    return render_template('notifications.html', notifications=notifications)
+
+
+@app.route('/notifications/<int:notification_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notification_id):
+    """Отмечает одно уведомление как прочитанное"""
+    notification = Notification.query.get_or_404(notification_id)
+    if notification.user_id != current_user.id:
+        flash('Это не ваше уведомление', 'danger')
+        return redirect(url_for('notifications_list'))
+
+    notification.is_read = True
+    db.session.commit()
+    return redirect(request.referrer or url_for('notifications_list'))
+
+
+@app.route('/notifications/mark_all_read', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    """Отмечает все уведомления пользователя как прочитанные"""
+    Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True})
+    db.session.commit()
+    flash('Все уведомления отмечены как прочитанные', 'success')
+    return redirect(request.referrer or url_for('notifications_list'))
+
+
+@app.route('/api/notifications/unread_count')
+@login_required
+def api_unread_notifications_count():
+    """
+    НОВОЕ: лёгкий API-эндпоинт для колокольчика в навигации - JS опрашивает его раз в 30 секунд,
+    чтобы счётчик непрочитанных обновлялся без перезагрузки страницы.
+    """
+    count = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+    return jsonify({'unread_count': count})
 
 
 # === АДМИНИСТРАТИВНЫЕ МАРШРУТЫ ===
@@ -603,10 +865,10 @@ def delete_booking(booking_id):
 @login_required
 @admin_required
 def admin_rooms():
-    """Управление комнатами (только для админов)"""
+    """Управление кабинетами (только для админов)"""
     rooms = Room.query.order_by(Room.name).all()
     # ИСПРАВЛЕНО: считаем вместимость здесь, а не через rooms|sum(attribute='capacity') в шаблоне -
-    # у комнат без ограничений capacity = None, и стандартный фильтр sum упал бы с ошибкой
+    # у кабинетов без ограничений capacity = None, и стандартный фильтр sum упал бы с ошибкой
     total_capacity = sum(r.capacity for r in rooms if r.capacity)
     unlimited_rooms_count = sum(1 for r in rooms if not r.capacity)
     return render_template('admin/rooms.html', rooms=rooms, total_capacity=total_capacity,
@@ -617,7 +879,7 @@ def admin_rooms():
 @login_required
 @admin_required
 def new_room():
-    """Добавление новой комнаты"""
+    """Добавление нового кабинета"""
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         unlimited = 'unlimited_capacity' in request.form
@@ -625,11 +887,11 @@ def new_room():
         color = request.form.get('color', '#FF6B35')
 
         if not name:
-            flash('Укажите название комнаты', 'danger')
+            flash('Укажите название кабинета', 'danger')
             return redirect(url_for('new_room'))
 
         # НОВОЕ: вместимость можно не ограничивать (актовые залы и т.п.),
-        # а для обычных комнат допускается до 9999 человек
+        # а для обычных кабинетов допускается до 9999 человек
         capacity = None
         if not unlimited:
             try:
@@ -652,7 +914,7 @@ def new_room():
         db.session.add(room)
         db.session.commit()
 
-        flash(f'Комната "{room.name}" успешно добавлена в систему!', 'success')
+        flash(f'Кабинет "{room.name}" успешно добавлен в систему!', 'success')
         return redirect(url_for('admin_rooms'))
 
     return render_template('admin/new_room.html')
@@ -662,7 +924,7 @@ def new_room():
 @login_required
 @admin_required
 def edit_room(room_id):
-    """Редактирование комнаты"""
+    """Редактирование кабинета"""
     room = Room.query.get_or_404(room_id)
 
     if request.method == 'POST':
@@ -671,7 +933,7 @@ def edit_room(room_id):
         capacity_raw = request.form.get('capacity', '').strip()
 
         if not name:
-            flash('Укажите название комнаты', 'danger')
+            flash('Укажите название кабинета', 'danger')
             return redirect(url_for('edit_room', room_id=room_id))
 
         capacity = None
@@ -693,12 +955,12 @@ def edit_room(room_id):
 
         db.session.commit()
 
-        flash(f'Информация о комнате "{room.name}" обновлена', 'success')
+        flash(f'Информация о кабинете "{room.name}" обновлена', 'success')
         return redirect(url_for('admin_rooms'))
 
     # ИСПРАВЛЕНО: раньше в шаблон не передавалась переменная `now`,
     # хотя edit_room.html использует её для поиска ближайшего будущего бронирования -
-    # это приводило к ошибке при открытии страницы редактирования комнаты
+    # это приводило к ошибке при открытии страницы редактирования кабинета
     return render_template('admin/edit_room.html', room=room, now=datetime.now())
 
 
@@ -706,7 +968,7 @@ def edit_room(room_id):
 @login_required
 @admin_required
 def delete_room(room_id):
-    """Включение/отключение комнаты (мягкое удаление)"""
+    """Включение/отключение кабинета (мягкое удаление)"""
     room = Room.query.get_or_404(room_id)
 
     if room.is_active:
@@ -716,14 +978,14 @@ def delete_room(room_id):
         ).first()
 
         if future_bookings:
-            flash('Нельзя удалить комнату с будущими бронированиями. Сначала отмените их', 'danger')
+            flash('Нельзя удалить кабинет с будущими бронированиями. Сначала отмените их', 'danger')
             return redirect(url_for('admin_rooms'))
 
         room.is_active = False
-        flash(f'Комната "{room.name}" деактивирована', 'success')
+        flash(f'Кабинет "{room.name}" деактивирован', 'success')
     else:
         room.is_active = True
-        flash(f'Комната "{room.name}" снова активна', 'success')
+        flash(f'Кабинет "{room.name}" снова активен', 'success')
 
     db.session.commit()
     return redirect(url_for('admin_rooms'))
@@ -797,7 +1059,7 @@ def reject_user(user_id):
 @app.route('/api/check_availability')
 @login_required
 def check_availability():
-    """Проверка доступности комнаты на выбранное время (для AJAX)"""
+    """Проверка доступности кабинета на выбранное время (для AJAX)"""
     room_id = request.args.get('room_id')
     start_time = request.args.get('start_time')
     end_time = request.args.get('end_time')
@@ -838,7 +1100,7 @@ def check_availability():
 @app.route('/api/room_bookings/<int:room_id>')
 @login_required
 def room_bookings(room_id):
-    """Получение всех бронирований комнаты (для AJAX)"""
+    """Получение всех бронирований кабинета (для AJAX)"""
     date_str = request.args.get('date')
 
     if date_str:
@@ -873,8 +1135,8 @@ def room_bookings(room_id):
 @login_required
 def find_available_rooms():
     """
-    НОВОЕ: поиск свободных комнат на заданный промежуток времени с фильтром по вместимости.
-    Используется на форме создания бронирования, чтобы быстро понять, какие комнаты свободны.
+    НОВОЕ: поиск свободных кабинетов на заданный промежуток времени с фильтром по вместимости.
+    Используется на форме создания бронирования, чтобы быстро понять, какие кабинеты свободны.
     """
     start_time = request.args.get('start_time')
     end_time = request.args.get('end_time')
@@ -891,7 +1153,7 @@ def find_available_rooms():
     except (ValueError, TypeError):
         min_capacity = 0
 
-    # Комнаты без ограничений (capacity is None) подходят под любой фильтр по вместимости
+    # Кабинеты без ограничений (capacity is None) подходят под любой фильтр по вместимости
     rooms = Room.query.filter(
         Room.is_active == True,  # noqa: E712
         db.or_(Room.capacity == None, Room.capacity >= min_capacity)  # noqa: E711
@@ -913,4 +1175,9 @@ with app.app_context():
     print(" База данных Firo SmartCalendar готова к работе!")
 
 if __name__ == '__main__':
-   app.run(host='0.0.0.0', port=5000)
+    # ИСПРАВЛЕНО: без host='0.0.0.0' Flask слушает только 127.0.0.1 (localhost) -
+    # приложение недоступно снаружи сервера, даже если порт открыт в файрволе.
+    # debug=True тоже небезопасно оставлять в продакшене - выключаем через переменную окружения.
+    debug_mode = os.environ.get('FIRO_DEBUG', 'false').lower() == 'true'
+    port = int(os.environ.get('FIRO_PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)

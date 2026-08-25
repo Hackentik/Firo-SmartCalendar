@@ -1,0 +1,19 @@
+[Unit]
+Description=Firo SmartCalendar (Flask)
+After=network.target
+
+[Service]
+# ВАЖНО: поменяйте User и WorkingDirectory на реальные значения на вашем сервере
+User=www-data
+WorkingDirectory=/opt/firo-smartcalendar
+EnvironmentFile=/opt/firo-smartcalendar/deploy/.env
+ExecStart=/opt/firo-smartcalendar/venv/bin/python3 /opt/firo-smartcalendar/app.py
+Restart=always
+RestartSec=5
+
+# Если вместо app.py вы перешли на gunicorn (рекомендуется при реальной нагрузке),
+# замените ExecStart на что-то вроде:
+# ExecStart=/opt/firo-smartcalendar/venv/bin/gunicorn -w 4 -b 0.0.0.0:5000 app:app
+
+[Install]
+WantedBy=multi-user.target

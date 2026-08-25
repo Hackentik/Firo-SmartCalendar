@@ -5,17 +5,17 @@
     <div class="col-md-8">
         <div class="card">
             <div class="card-header card-header-accent">
-                <h4 class="mb-0"><i class="bi bi-plus-lg"></i> Добавление новой переговорной комнаты</h4>
+                <h4 class="mb-0"><i class="bi bi-plus-lg"></i> Добавление нового кабинета</h4>
             </div>
             <div class="card-body">
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="mb-3">
-                        <label for="name" class="form-label">Название комнаты *</label>
+                        <label for="name" class="form-label">Название кабинета *</label>
                         <input type="text" class="form-control" id="name" name="name"
                                placeholder="Например: Конференц-зал Оранжевый" required>
-                        <div class="form-text">Дайте комнате понятное название</div>
+                        <div class="form-text">Дайте кабинету понятное название</div>
                     </div>
 
                     <div class="mb-3">
@@ -34,16 +34,16 @@
                         <label for="equipment" class="form-label">Оборудование</label>
                         <input type="text" class="form-control" id="equipment" name="equipment"
                                placeholder="проектор, флипчарт, телевизор, маркерная доска">
-                        <div class="form-text">Перечислите через запятую, что есть в комнате</div>
+                        <div class="form-text">Перечислите через запятую, что есть в кабинете</div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="description" class="form-label">Описание комнаты</label>
+                        <label for="description" class="form-label">Описание кабинета</label>
                         <textarea class="form-control" id="description" name="description"
-                                  rows="3" placeholder="Дополнительная информация о комнате..."></textarea>
+                                  rows="3" placeholder="Дополнительная информация о кабинете..."></textarea>
                     </div>
 
-                    {# НОВОЕ: цвет комнаты используется для окраски бронирований в календаре #}
+                    {# НОВОЕ: цвет кабинета используется для окраски бронирований в календаре #}
                     <div class="mb-3">
                         <label for="color" class="form-label">Цвет в календаре</label>
                         <input type="color" class="form-control form-control-color" id="color" name="color" value="#FF6B35">
@@ -56,7 +56,7 @@
                             ← Отмена
                         </a>
                         <button type="submit" class="btn btn-firo">
-                            Сохранить комнату
+                            Сохранить кабинет
                         </button>
                     </div>
                 </form>
@@ -68,7 +68,7 @@
                 <h6 class="text-firo"><i class="bi bi-lightbulb"></i> Рекомендации по названиям:</h6>
                 <ul class="small mb-0">
                     <li><strong>Конференц-зал</strong> - для больших собраний</li>
-                    <li><strong>Переговорная</strong> - для встреч 4-8 человек</li>
+                    <li><strong>Небольшой кабинет</strong> - для встреч 4-8 человек</li>
                     <li><strong>Кабинет руководителя</strong> - для личных встреч</li>
                     <li><strong>Актовый зал</strong> - отметьте "без ограничений"</li>
                 </ul>

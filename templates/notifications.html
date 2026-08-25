@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="text-firo">
+        <i class="bi bi-bell"></i> Уведомления
+    </h2>
+    {% if notifications %}
+    <form method="POST" action="{{ url_for('mark_all_notifications_read') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-firo btn-sm">
+            <i class="bi bi-check-all"></i> Отметить все как прочитанные
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{% if notifications %}
+<div class="list-group">
+    {% for n in notifications %}
+    <div class="list-group-item d-flex justify-content-between align-items-start {% if not n.is_read %}bg-light{% endif %}">
+        <div>
+            <div class="{% if not n.is_read %}fw-bold{% endif %}">
+                {% if n.reminder %}
+                <a href="{{ url_for('edit_reminder', reminder_id=n.reminder.id) }}" class="text-decoration-none">
+                    {{ n.message }}
+                </a>
+                {% else %}
+                {{ n.message }}
+                {% endif %}
+            </div>
+            <small class="text-muted">{{ n.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
+        </div>
+        {% if not n.is_read %}
+        <form method="POST" action="{{ url_for('mark_notification_read', notification_id=n.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-check-lg"></i>
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5">
+    <div class="empty-state-icon"><i class="bi bi-bell-slash display-4 d-block mb-2"></i></div>
+    <h4 class="text-muted">Пока нет уведомлений</h4>
+    <p class="mb-0">Здесь появятся уведомления, когда кто-то упомянёт вас в напоминании.</p>
+</div>
+{% endif %}
+{% endblock %}

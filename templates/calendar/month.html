@@ -6,7 +6,7 @@
         <h2 class="text-firo mb-1"><i class="bi bi-calendar3"></i> {{ month_name }} {{ year }}</h2>
         <span class="free-now-badge">
             <span class="dot"></span>
-            Свободно сейчас: {{ free_rooms_now }} из {{ rooms|length }} комнат
+            Свободно сейчас: {{ free_rooms_now }} из {{ rooms|length }} кабинетов
         </span>
     </div>
 
@@ -36,12 +36,13 @@
     {% for room in rooms %}
     <span class="badge" style="background-color: {{ room.color or '#FF6B35' }};">{{ room.name }}</span>
     {% endfor %}
+    <span class="badge" style="background-color: #6C7A8C;"><i class="bi bi-bell"></i> Напоминание</span>
 </div>
 {% else %}
 <div class="alert alert-warning">
-    Пока не добавлено ни одной переговорной комнаты.
+    Пока не добавлено ни одного кабинета.
     {% if current_user.is_admin %}
-        <a href="{{ url_for('new_room') }}">Добавить первую комнату →</a>
+        <a href="{{ url_for('new_room') }}">Добавить первый кабинет →</a>
     {% endif %}
 </div>
 {% endif %}
@@ -62,18 +63,28 @@
                 <div class="calendar-cell {% if is_today %}current-day{% endif %}">
                     <div class="day-number {% if is_today %}text-firo{% endif %}">{{ day }}</div>
                     <div class="day-events">
-                        {% set day_bookings = bookings_by_day.get(day, []) %}
-                        {% for booking in day_bookings[:3] %}
-                            <a class="day-event-pill"
-                               style="background-color: {{ booking.room.color or '#FF6B35' }};"
-                               href="{{ url_for('edit_booking', booking_id=booking.id) }}"
-                               title="{{ booking.title }} · {{ booking.room.name }} · {{ booking.start_time.strftime('%H:%M') }}–{{ booking.end_time.strftime('%H:%M') }}">
-                                {{ booking.start_time.strftime('%H:%M') }} {{ booking.title }}
-                            </a>
+                        {% set items = day_items.get(day, []) %}
+                        {% for item in items[:3] %}
+                            {% if item.kind == 'booking' %}
+                                {% set booking = item.obj %}
+                                <a class="day-event-pill"
+                                   style="background-color: {{ booking.room.color or '#FF6B35' }};"
+                                   href="{{ url_for('edit_booking', booking_id=booking.id) }}"
+                                   title="{{ booking.title }} · {{ booking.room.name }} · {{ booking.start_time.strftime('%H:%M') }}–{{ booking.end_time.strftime('%H:%M') }}">
+                                    {{ booking.start_time.strftime('%H:%M') }} {{ booking.title }}
+                                </a>
+                            {% else %}
+                                {% set reminder = item.obj %}
+                                <a class="day-event-pill is-reminder"
+                                   href="{{ url_for('edit_reminder', reminder_id=reminder.id) }}"
+                                   title="{{ reminder.title }}{% if reminder.room %} · {{ reminder.room.name }}{% endif %} · {{ reminder.start_time.strftime('%H:%M') }}">
+                                    <i class="bi bi-bell"></i> {{ reminder.start_time.strftime('%H:%M') }} {{ reminder.title }}
+                                </a>
+                            {% endif %}
                         {% endfor %}
-                        {% if day_bookings|length > 3 %}
+                        {% if items|length > 3 %}
                             <a class="day-event-more" href="{{ url_for('bookings_list') }}">
-                                + ещё {{ day_bookings|length - 3 }}
+                                + ещё {{ items|length - 3 }}
                             </a>
                         {% endif %}
                     </div>
