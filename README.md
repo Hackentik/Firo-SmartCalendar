@@ -1,6 +1,6 @@
 <div align="center">
 
-# Firo SmartCalendar
+# 🍊 Firo SmartCalendar
 
 **Веб-приложение для бронирования кабинетов и напоминаний в офисе**
 
