@@ -103,6 +103,12 @@
                                 <li><span class="dropdown-item-text text-muted small">Пока нет уведомлений</span></li>
                             {% endif %}
                             <li><a class="dropdown-item text-center text-firo small" href="{{ url_for('notifications_list') }}">Все уведомления</a></li>
+                            {# НОВОЕ: включение всплывающих уведомлений браузера (Web Notifications API) #}
+                            <li>
+                                <button type="button" class="dropdown-item text-center small text-muted" id="enableBrowserNotif">
+                                    <i class="bi bi-bell-fill"></i> Включить уведомления браузера
+                                </button>
+                            </li>
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
@@ -154,18 +160,63 @@
     <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
     {% if current_user.is_authenticated %}
     <script>
-        // НОВОЕ: раз в 30 секунд обновляем счётчик непрочитанных уведомлений без перезагрузки страницы
+        // НОВОЕ: кнопка запроса разрешения на браузерные уведомления (Web Notifications API).
+        // Запрашивать разрешение можно только по клику пользователя - браузеры блокируют
+        // автоматический запрос без явного действия человека.
+        const enableBtn = document.getElementById('enableBrowserNotif');
+        if (enableBtn) {
+            function updateEnableBtnLabel() {
+                if (!('Notification' in window)) {
+                    enableBtn.textContent = 'Браузер не поддерживает уведомления';
+                    enableBtn.disabled = true;
+                } else if (Notification.permission === 'granted') {
+                    enableBtn.innerHTML = '<i class="bi bi-bell-fill"></i> Уведомления браузера включены';
+                    enableBtn.disabled = true;
+                } else if (Notification.permission === 'denied') {
+                    enableBtn.textContent = 'Уведомления заблокированы в настройках браузера';
+                    enableBtn.disabled = true;
+                }
+            }
+            updateEnableBtnLabel();
+            enableBtn.addEventListener('click', function () {
+                if ('Notification' in window) {
+                    Notification.requestPermission().then(updateEnableBtnLabel);
+                }
+            });
+        }
+
+        // Уведомления, которые уже показаны на странице при загрузке - чтобы не дублировать всплывашку
+        const seenNotificationIds = new Set(
+            {{ recent_notifications|map(attribute='id')|list|tojson }}
+        );
+
+        // НОВОЕ: раз в 30 секунд обновляем счётчик непрочитанных и показываем всплывающее
+        // уведомление браузера по каждой новой записи (если пользователь разрешил уведомления)
         setInterval(function () {
             fetch("{{ url_for('api_unread_notifications_count') }}")
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     const badge = document.getElementById('notifCount');
-                    if (!badge) return;
-                    if (data.unread_count > 0) {
-                        badge.textContent = data.unread_count;
-                        badge.classList.remove('d-none');
-                    } else {
-                        badge.classList.add('d-none');
+                    if (badge) {
+                        if (data.unread_count > 0) {
+                            badge.textContent = data.unread_count;
+                            badge.classList.remove('d-none');
+                        } else {
+                            badge.classList.add('d-none');
+                        }
+                    }
+
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        (data.latest || []).forEach(function (n) {
+                            if (!seenNotificationIds.has(n.id)) {
+                                seenNotificationIds.add(n.id);
+                                const browserNotif = new Notification('Firo SmartCalendar', { body: n.message });
+                                browserNotif.onclick = function () {
+                                    window.focus();
+                                    window.location.href = n.url;
+                                };
+                            }
+                        });
                     }
                 })
                 .catch(function () { /* тихо игнорируем сбой опроса */ });

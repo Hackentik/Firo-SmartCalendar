@@ -245,11 +245,13 @@ class Notification(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Кому адресовано
     message = db.Column(db.String(300), nullable=False)  # Текст уведомления
     link_reminder_id = db.Column(db.Integer, db.ForeignKey('reminders.id'), nullable=True)  # Ссылка на напоминание
+    link_booking_id = db.Column(db.Integer, db.ForeignKey('bookings.id'), nullable=True)  # НОВОЕ: ссылка на бронирование
     is_read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref='notifications', foreign_keys=[user_id])
     reminder = db.relationship('Reminder', backref=db.backref('notifications', cascade='all, delete-orphan'))
+    booking = db.relationship('Booking', backref=db.backref('notifications', cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<Notification for user={self.user_id}: {self.message[:30]}>'

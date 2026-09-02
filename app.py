@@ -8,6 +8,8 @@ import calendar
 from functools import wraps
 import json
 import os
+import smtplib
+from email.mime.text import MIMEText
 
 # Импортируем расширения
 from extensions import db, login_manager, csrf
@@ -28,6 +30,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['FIRO_ORANGE'] = '#FF6B35'
+
+# НОВОЕ: настройки почты для email-уведомлений - если FIRO_SMTP_HOST не задан,
+# письма просто не отправляются (функция send_email_notification тихо выходит) -
+# это позволяет разрабатывать и тестировать без настроенного SMTP
+app.config['SMTP_HOST'] = os.environ.get('FIRO_SMTP_HOST')
+app.config['SMTP_PORT'] = int(os.environ.get('FIRO_SMTP_PORT', 587))
+app.config['SMTP_USER'] = os.environ.get('FIRO_SMTP_USER')
+app.config['SMTP_PASSWORD'] = os.environ.get('FIRO_SMTP_PASSWORD')
+app.config['SMTP_FROM'] = os.environ.get('FIRO_SMTP_FROM', app.config['SMTP_USER'])
+app.config['SMTP_USE_TLS'] = os.environ.get('FIRO_SMTP_TLS', 'true').lower() == 'true'
 
 # Рабочие часы календаря (используются в недельном виде и на главной)
 WORK_HOUR_START = 8
@@ -96,6 +108,36 @@ def parse_datetime_local(value):
         return datetime.strptime(value, '%Y-%m-%dT%H:%M')
     except ValueError:
         return None
+
+
+def send_email_notification(to_email, subject, body):
+    """
+    НОВОЕ: отправляет email-уведомление через SMTP. Если почта не настроена
+    (нет FIRO_SMTP_HOST в переменных окружения) - тихо ничего не делает,
+    чтобы не ломать приложение там, где почта ещё не подключена.
+    Ошибки отправки логируются, но не прерывают основной запрос -
+    непришедшее письмо не должно мешать создать бронирование или напоминание.
+    """
+    host = app.config.get('SMTP_HOST')
+    if not host or not to_email:
+        return
+
+    msg = MIMEText(body, 'plain', 'utf-8')
+    msg['Subject'] = subject
+    msg['From'] = app.config.get('SMTP_FROM') or 'firo-smartcalendar@localhost'
+    msg['To'] = to_email
+
+    try:
+        with smtplib.SMTP(host, app.config.get('SMTP_PORT', 587), timeout=10) as server:
+            if app.config.get('SMTP_USE_TLS', True):
+                server.starttls()
+            smtp_user = app.config.get('SMTP_USER')
+            smtp_password = app.config.get('SMTP_PASSWORD')
+            if smtp_user and smtp_password:
+                server.login(smtp_user, smtp_password)
+            server.sendmail(msg['From'], [to_email], msg.as_string())
+    except Exception as e:
+        app.logger.warning(f'Не удалось отправить email на {to_email}: {e}')
 
 
 # === МАРШРУТЫ ДЛЯ АВТОРИЗАЦИИ ===
@@ -517,6 +559,9 @@ def new_booking():
                     f'({len(participants)} чел. в кабинете на {room.capacity})', 'warning'
                 )
 
+            # НОВОЕ: участникам встречи приходит внутреннее уведомление + письмо на почту
+            _notify_mentioned_users('booking', booking, participants)
+
             flash(f'Отлично! Кабинет забронирован на {start_time.strftime("%d.%m.%Y %H:%M")}', 'success')
             return redirect(url_for('calendar_view'))
 
@@ -593,6 +638,8 @@ def edit_booking(booking_id):
             flash('Это время уже занято другим мероприятием', 'warning')
             return redirect(url_for('edit_booking', booking_id=booking_id))
 
+        old_participants = set(booking.get_participants_list())
+
         try:
             booking.title = title
             booking.room_id = room_id
@@ -605,6 +652,10 @@ def edit_booking(booking_id):
 
             if booking.overcapacity():
                 flash('Внимание: участников больше, чем вместимость выбранного кабинета', 'warning')
+
+            # НОВОЕ: уведомляем только тех, кого добавили заново - чтобы не спамить остальных
+            newly_added = [p for p in participants if p not in old_participants]
+            _notify_mentioned_users('booking', booking, newly_added)
 
             flash('Бронирование успешно обновлено!', 'success')
             return redirect(url_for('calendar_view'))
@@ -702,7 +753,7 @@ def new_reminder():
             db.session.commit()
 
             # НОВОЕ: упомянутым участникам приходит внутреннее уведомление (колокольчик в навигации)
-            _notify_participants(reminder, participants)
+            _notify_mentioned_users('reminder', reminder, participants)
 
             flash(f'Напоминание «{title}» создано на {start_time.strftime("%d.%m.%Y %H:%M")}', 'success')
             return redirect(url_for('reminders_list'))
@@ -753,7 +804,7 @@ def edit_reminder(reminder_id):
 
             # НОВОЕ: уведомляем только тех, кого добавили заново - чтобы не спамить остальных при каждом сохранении
             newly_added = [p for p in new_participants if p not in old_participants]
-            _notify_participants(reminder, newly_added)
+            _notify_mentioned_users('reminder', reminder, newly_added)
 
             flash('Напоминание обновлено', 'success')
             return redirect(url_for('reminders_list'))
@@ -791,8 +842,12 @@ def delete_reminder(reminder_id):
     return redirect(request.referrer or url_for('reminders_list'))
 
 
-def _notify_participants(reminder, participant_ids):
-    """НОВОЕ: создаёт внутренние уведомления для упомянутых в напоминании пользователей"""
+def _notify_mentioned_users(kind, obj, participant_ids):
+    """
+    НОВОЕ: создаёт внутреннее уведомление (колокольчик) + отправляет email
+    упомянутым пользователям. Работает и для напоминаний, и для бронирований.
+    kind: 'reminder' или 'booking'
+    """
     if not participant_ids:
         return
     try:
@@ -800,16 +855,36 @@ def _notify_participants(reminder, participant_ids):
     except (TypeError, ValueError):
         return
 
+    creator_id = obj.user_id
+    creator_name = obj.creator.username if kind == 'reminder' else obj.user.username
+
     for uid in int_ids:
-        if uid == reminder.user_id:
-            continue  # не уведомляем автора о его собственном напоминании
-        notification = Notification(
-            user_id=uid,
-            message=f'{reminder.creator.username} упомянул(а) вас в напоминании «{reminder.title}» '
-                     f'на {reminder.start_time.strftime("%d.%m.%Y %H:%M")}',
-            link_reminder_id=reminder.id
-        )
+        if uid == creator_id:
+            continue  # не уведомляем автора о его собственной записи
+
+        recipient = User.query.get(uid)
+        if not recipient:
+            continue
+
+        if kind == 'reminder':
+            message = (f'{creator_name} упомянул(а) вас в напоминании «{obj.title}» '
+                       f'на {obj.start_time.strftime("%d.%m.%Y %H:%M")}')
+            notification = Notification(user_id=uid, message=message, link_reminder_id=obj.id)
+        else:
+            message = (f'{creator_name} добавил(а) вас в бронирование «{obj.title}» '
+                       f'({obj.room.name}, {obj.start_time.strftime("%d.%m.%Y %H:%M")})')
+            notification = Notification(user_id=uid, message=message, link_booking_id=obj.id)
+
         db.session.add(notification)
+
+        # НОВОЕ: письмо на почту дублирует внутреннее уведомление - если SMTP не настроен,
+        # send_email_notification просто ничего не сделает
+        send_email_notification(
+            recipient.email,
+            'Firo SmartCalendar - новое уведомление',
+            message + '\n\nОткройте приложение, чтобы посмотреть подробности.'
+        )
+
     db.session.commit()
 
 
@@ -853,10 +928,24 @@ def mark_all_notifications_read():
 def api_unread_notifications_count():
     """
     НОВОЕ: лёгкий API-эндпоинт для колокольчика в навигации - JS опрашивает его раз в 30 секунд,
-    чтобы счётчик непрочитанных обновлялся без перезагрузки страницы.
+    чтобы счётчик обновлялся, а браузер мог показать всплывающее уведомление
+    (Web Notifications API) по новым непрочитанным записям без перезагрузки страницы.
     """
+    unread = Notification.query.filter_by(user_id=current_user.id, is_read=False) \
+        .order_by(Notification.created_at.desc()).limit(10).all()
     count = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
-    return jsonify({'unread_count': count})
+
+    def notification_url(n):
+        if n.link_reminder_id:
+            return url_for('edit_reminder', reminder_id=n.link_reminder_id)
+        if n.link_booking_id:
+            return url_for('edit_booking', booking_id=n.link_booking_id)
+        return url_for('notifications_list')
+
+    return jsonify({
+        'unread_count': count,
+        'latest': [{'id': n.id, 'message': n.message, 'url': notification_url(n)} for n in unread]
+    })
 
 
 # === АДМИНИСТРАТИВНЫЕ МАРШРУТЫ ===
